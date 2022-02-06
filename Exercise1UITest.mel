@@ -1,0 +1,306 @@
+{
+    // 'Bool' values for UI  
+    global float $axisAligned = 0;
+    global float $sphereActive = 0;
+    global float $offsetVal = 0;
+    global float $parentActive = 0;
+    global float $lockStateActive = 0;
+    global float $createLayerActive = 0;
+    global float $createNewShader = 0;
+    
+    //global float $redColour = 0, $greenColour = 0, $blueColour = 1, $transparencyVal = 0.5;
+    
+    // Standard Procedure
+    global proc runEveryTime()
+    {
+        if($sphereActive == 0)
+        {
+            cubeBBox();
+        }
+        else
+        {
+            sphereBBox();
+        }
+    }
+    
+    // AxisAligned
+    proc axisAlignedActive()
+    {
+        if($axisAligned == 0)
+        {
+            $axisAligned = 1;
+        }
+        else
+        {
+            $axisAligned = 0;
+        }
+    }
+    
+    // BoundingBox
+    proc cubeSelection()
+    {
+        $sphereActive = 0;
+    }
+    proc sphereSelection()
+    {
+        $sphereActive = 1;
+    }
+    
+    // Shader
+    proc createNewShaderActive()
+    {
+        $createNewShader = 1;
+    }
+    proc createNewShaderDisabled()
+    {
+        $createNewShader = 0;
+    }
+    
+    // Parent
+    proc parentBBoxToMeshActive()
+    {
+        $parentActive = 1;
+    }
+    proc parentBBoxToMeshDisabled()
+    {
+        $parentActive = 0;
+    }
+    
+    // Lock Attributes
+    proc lockAttrActive()
+    {
+        $lockStateActive = 1;
+    }
+    proc lockAttrDisabled()
+    {
+        $lockStateActive = 0;
+    }
+    
+    // Create Layer
+    proc createLayerActive()
+    {
+        $createLayerActive = 1;
+    }
+    proc createLayerDisabled()
+    {
+        $createLayerActive = 0;
+    }
+    
+    // Creating Sphere - Procedure
+    global proc sphereBBox()
+    {
+        // Stash selected object node information
+        string $objectNamesArray[] = selectedNodes();
+        string $objectName = $objectNamesArray[0];
+
+        // Resets pivot
+        xform -cp;
+
+        float $rotationOfMesh[] = getAttr ($objectName + ".rotate");
+        float $translateOfMesh[] = getAttr($objectName + ".translate");
+
+        if($axisAligned == 0)
+        {
+           setAttr($objectName + ".rotate", 0, 0, 0); 
+        }
+        else
+        {
+            makeIdentity -apply true -t 0 -r 1 -s 0 -n 0 -pn 1;
+        }
+
+        // Get current target's bounding box (min,max values for x,y,z)
+        float $bbox[] = `exactWorldBoundingBox -ce true $objectName`;
+
+        // Find Center Point
+        float $midX = ($bbox[3] + $bbox[0])/2;
+        float $midY = ($bbox[4] + $bbox[1])/2;
+        float $midZ = ($bbox[5] + $bbox[2])/2;
+
+        // Calculation for Sphere Radius (Diameter)
+        float $longestDistance = 0;
+        float $xDis = ($bbox[3] - $bbox[0]);
+        float $yDis = ($bbox[4] - $bbox[1]);
+        float $zDis = ($bbox[5] - $bbox[2]);
+
+        $longestDistance = sqrt(($yDis*$yDis)+($xDis*$xDis)+($zDis*$zDis));
+        
+        string $createSphereBoundingBoxArray[] = `polySphere -n "BoundingSphere" -r ($longestDistance/2)`;
+        string $bboxTarget = $createSphereBoundingBoxArray[0];
+        float $scaleOfBBox[] = getAttr($bboxTarget + ".scale");
+        
+        float $userOffsetInput = `floatSliderGrp -q -value offsetValue`;
+        setAttr($bboxTarget + ".scale", $scaleOfBBox[0] + $userOffsetInput, $scaleOfBBox[1]+ $userOffsetInput, $scaleOfBBox[2] + $userOffsetInput);
+        move -xyz $midX $midY $midZ;
+        
+        if($axisAligned == 0)
+        {
+            setAttr($objectName +".rotate", $rotationOfMesh[0], $rotationOfMesh[1], $rotationOfMesh[2]);
+        }
+        
+
+           // Sets material of boundingbox to lambert
+        if($createNewShader == 1)
+        {
+            float $bboxRGB[] = `colorSliderGrp -q -rgb colourValues`;
+            float $bboxTrans = `floatSliderGrp -q -value transValue`;
+            string $bboxMaterial = `shadingNode -asShader lambert`;
+            string $bboxShader = `sets -renderable true -noSurfaceShader true -empty`;
+            connectAttr -force ($bboxMaterial + ".outColor") ($bboxShader + ".surfaceShader");
+            sets -e -forceElement $bboxShader $bboxTarget;
+            setAttr ($bboxMaterial + ".color") -type float3 $bboxRGB[0] $bboxRGB[1] $bboxRGB[2];
+            setAttr ($bboxMaterial + ".transparency") -type float3 $bboxTrans $bboxTrans $bboxTrans;
+        }
+
+        if($parentActive == 1)
+        {
+            parent $bboxTarget $objectName;
+        }
+
+        if($lockStateActive == 1)
+        {
+            setAttr -lock true ($bboxTarget + ".translate");
+            setAttr -lock true ($bboxTarget + ".rotate");
+            setAttr -lock true ($bboxTarget + ".scale");
+        }
+        
+        select -r $bboxTarget;
+        if($createLayerActive == 1)
+        {
+            createDisplayLayer -nr -n "BoundingBoxLayer";
+        }
+    }
+    
+    // Creating Cube Bounding Box - Procedure
+    global proc cubeBBox()
+    {
+        // Stash selected object node information
+        string $objectNamesArray[] = selectedNodes();
+        string $objectName = $objectNamesArray[0];
+
+        // Resets pivot
+        xform -cp;
+
+        float $rotationOfMesh[] = getAttr ($objectName + ".rotate");
+        float $translateOfMesh[] = getAttr($objectName + ".translate");
+
+        if($axisAligned == 0)
+        {
+           setAttr($objectName + ".rotate", 0, 0, 0); 
+        }
+        else
+        {
+            makeIdentity -apply true -t 0 -r 1 -s 0 -n 0 -pn 1;
+        }
+
+        // Get current target's bounding box (min,max values for x,y,z)
+        float $bbox[] = `exactWorldBoundingBox -ce true $objectName`;
+
+        // Find Center Point
+        float $midX = ($bbox[3] + $bbox[0])/2;
+        float $midY = ($bbox[4] + $bbox[1])/2;
+        float $midZ = ($bbox[5] + $bbox[2])/2;
+        
+        string $createdBoundingBoxArray[] = `polyCube -n "BoundingBox" -w ($bbox[3] - $bbox[0]) -h ($bbox[4] - $bbox[1]) -d ($bbox[5] - $bbox[2])`;
+        string $bboxTarget = $createdBoundingBoxArray[0];
+
+        float $scaleOfBBox[] = getAttr($bboxTarget + ".scale");
+
+        if($axisAligned == 0)
+        {
+           setAttr($bboxTarget + ".rotate", $rotationOfMesh[0], $rotationOfMesh[1], $rotationOfMesh[2]);
+           //setAttr($objectName +".rotate", $rotationOfMesh[0], $rotationOfMesh[1], $rotationOfMesh[2]); 
+        }
+        
+        float $userOffsetInput = `floatSliderGrp -q -value offsetValue`;
+        setAttr($bboxTarget + ".scale", $scaleOfBBox[0] + $userOffsetInput, $scaleOfBBox[1]+ $userOffsetInput, $scaleOfBBox[2] + $userOffsetInput);
+        move -xyz $midX $midY $midZ;
+
+        // THIS WAS MOVED TO IF ABOVE //
+        if($axisAligned == 0)
+        {
+            setAttr($objectName +".rotate", $rotationOfMesh[0], $rotationOfMesh[1], $rotationOfMesh[2]); 
+        }
+
+        // Sets material of boundingbox to lambert
+        if($createNewShader == 1)
+        {
+            float $bboxRGB[] = `colorSliderGrp -q -rgb colourValues`;
+            float $bboxTrans = `floatSliderGrp -q -value transValue`;
+            string $bboxMaterial = `shadingNode -asShader lambert`;
+            string $bboxShader = `sets -renderable true -noSurfaceShader true -empty`;
+            connectAttr -force ($bboxMaterial + ".outColor") ($bboxShader + ".surfaceShader");
+            sets -e -forceElement $bboxShader $bboxTarget;
+            setAttr ($bboxMaterial + ".color") -type float3 $bboxRGB[0] $bboxRGB[1] $bboxRGB[2];
+            setAttr ($bboxMaterial + ".transparency") -type float3 $bboxTrans $bboxTrans $bboxTrans;
+        }
+    
+        if($parentActive == 1)
+        {
+            parent $bboxTarget $objectName;
+        }
+
+        if($lockStateActive == 1)
+        {
+            setAttr -lock true ($bboxTarget + ".translate");
+            setAttr -lock true ($bboxTarget + ".rotate");
+            setAttr -lock true ($bboxTarget + ".scale");
+        }
+        
+        select -r $bboxTarget;
+        if($createLayerActive == 1)
+        {
+            createDisplayLayer -nr -n "BoundingBoxLayer";
+        }
+    }
+    
+    // Execute All
+    proc executeAll()
+    {
+        runEveryTime();
+    }
+    
+    // Undo
+    proc undoLast() 
+    {
+        undo;
+    }
+    
+    if (`window -exists myWindow`)
+    {
+        deleteUI -window myWindow;
+    }
+    
+    window -title "Bounding Box" myWindow;
+    
+    columnLayout;
+    text -l "Bounding Box Type:";
+    $checBoxAxis = `checkBox -l "Axis Aligned" -onCommand "axisAlignedActive" -offCommand "axisAlignedActive"`;
+    $radioCubeSphere = `radioCollection`;
+    $radioCube = `radioButton -l "Sphere" -cc "sphereSelection"`;
+    $radioSphere = `radioButton -l "Cube" -cc "cubeSelection"`;
+    
+    text -l " ";
+    text -l "Bounding Box Size:";
+    $offsetSlider = `floatSliderGrp -l "Offset " -field true -min -0.9 -max 1 -value 0 offsetValue`;
+    
+    text -l " ";
+    text -l "Bounding Box Shader:";
+    $checkBoxShader = `checkBox -l "Create New Bounding Box Shader" -onCommand "createNewShaderActive" -offCommand "createNewShaderDisabled"`;
+    $colourDisplay = `colorSliderGrp -l "Pick Colour " colourValues`;
+    $transparencySlider = `floatSliderGrp -l "Transparency " -field true -min 0 -max 1 -value 0.5 transValue`;
+    
+    text -l " ";
+    text -l "Bounding Box Settings:";
+    $checkBoxParent = `checkBox -l "Parent Bounding Box with Mesh" -onCommand "parentBBoxToMeshActive" -offCommand "parentBBoxToMeshDisabled"`;
+    $checkBoxLock = `checkBox -l "Lock Bounding Box Attributes" -onCommand "lockAttrActive" -offCommand "lockAttrDisabled"`;
+    $checkBoxCreateLayer = `checkBox -l "Create Layer for Bounding Box" -onCommand "createLayerActive" -offCommand "createLayerDisabled"`;
+    
+    text -l " ";
+    text -l " ";
+    rowLayout -numberOfColumns 3;
+    $executeButton = `button -l "Create BBox" -w 125 -command "executeAll"`;
+    $undoButton = `button -l "Undo Last Operation" -w 125 -command "undoLast"`;
+    $exitButton = `button -l "Exit" -w 125 -command "deleteUI -window myWindow"`;
+    
+    showWindow;
+}
